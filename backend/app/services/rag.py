@@ -1,11 +1,10 @@
+import re
+from typing import Dict, Any, Tuple, List, Generator, Optional
 from app.services.vector_store import vector_store
 from app.services.embeddings import embedding_service
 from app.services.llm import llm_service
 from app.config import settings
 from app.utils.logging import retrieval_logger
-from typing import Dict, Any, Tuple, List, Generator
-
-from typing import Dict, Any, Tuple, List, Generator, Optional
 
 RAG_SYSTEM_PROMPT = """
 You are an AI Textbook Study Assistant developed by Adithyan (https://adithyan-portfolio.pages.dev). 
@@ -70,30 +69,37 @@ def process_rag_query_stream(question: str, user_id: Optional[str] = None) -> Tu
     return stream_gen, top_chunks
 
 
-def generate_notes_from_docs(document_id: str = None, topic: str = None) -> str:
-    # A simple implementation for notes generation.
-    # In a real scenario, you'd fetch all chunks for a document or specific chunks matching a topic.
-    # For now, if topic is provided, search it. If document_id is provided, you might want to fetch those chunks directly.
-    # Let's keep it simple: if there's a topic, search and summarize.
-    
+def generate_notes_from_docs(document_id: str = None, topic: str = None, user_id: Optional[str] = None) -> str:
+    """
+    Generates structured, clean bullet-point study notes from uploaded documents.
+    """
     if topic:
         query_vector = embedding_service.embed_query(topic)
-        chunks = vector_store.search(query_vector, top_k=5)
+        chunks = vector_store.search(query_vector, top_k=8, user_id=user_id)
     else:
-        # Just grab random/first few chunks (requires different Qdrant query, simplified here)
-        # Using a dummy query to just get some content
-        query_vector = embedding_service.embed_query("textbook notes summary")
-        chunks = vector_store.search(query_vector, top_k=5)
+        query_vector = embedding_service.embed_query("textbook main concepts definitions formulas study notes summary")
+        chunks = vector_store.search(query_vector, top_k=8, user_id=user_id)
         
     if not chunks:
-        return "No documents found to generate notes."
+        return "📂 No uploaded documents found to generate study notes. Please upload a textbook photo or PDF first!"
         
-    context_str = "\n".join([c['text'] for c in chunks])
+    context_str = "\n\n".join([f"Source ({c['original_filename']}):\n{c['text']}" for c in chunks])
     
-    prompt = """
-    Create concise, structured study notes based on the following textbook content.
-    Include key definitions, formulas, and bullet points.
-    """
+    system_prompt = (
+        "You are an expert study guide creator. "
+        "Create clear, beautifully structured study notes covering ALL main topics present in the textbook context. "
+        "STRICT FORMATTING RULES:\n"
+        "1. Do NOT use markdown asterisks (`*` or `**`) anywhere in the text.\n"
+        "2. Use clean bullet points starting with `• ` for key points and findings.\n"
+        "3. Group information logically under clear section titles.\n"
+        "4. Include all key definitions, formulas, and main topic findings."
+    )
     
-    user_prompt = f"Content:\n{context_str}\n\nPlease generate notes."
-    return llm_service.generate_response(system_prompt=prompt, user_prompt=user_prompt)
+    user_prompt = f"Textbook Context:\n{context_str}\n\nPlease generate structured study notes."
+    
+    notes = llm_service.generate_response(system_prompt=system_prompt, user_prompt=user_prompt)
+    
+    # Post-process cleanup to strip any raw markdown asterisks
+    cleaned_notes = re.sub(r'\*+', '', notes)
+    cleaned_notes = re.sub(r'^\s*[-+]\s+', '• ', cleaned_notes, flags=re.MULTILINE)
+    return cleaned_notes.strip()

@@ -154,9 +154,12 @@ class TelegramBotManager:
 
     async def _handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception:
+            pass
+
         user_id = f"tg_{update.effective_user.id}"
-        
         data = query.data
 
         # 1. Pick Topic -> Ask Question Count
@@ -164,7 +167,7 @@ class TelegramBotManager:
             topic_name = data.split("picktopic:", 1)[1]
             keyboard = [
                 [
-                    InlineKeyboardButton("✨ Auto (Smart)", callback_data=f"startquiz:{topic_name}:5"),
+                    InlineKeyboardButton("✨ Auto", callback_data=f"startquiz:{topic_name}:0"),
                     InlineKeyboardButton("5 Qs", callback_data=f"startquiz:{topic_name}:5"),
                     InlineKeyboardButton("10 Qs", callback_data=f"startquiz:{topic_name}:10"),
                     InlineKeyboardButton("15 Qs", callback_data=f"startquiz:{topic_name}:15")
@@ -183,7 +186,8 @@ class TelegramBotManager:
             topic_name = parts[1]
             count = int(parts[2])
             
-            await query.edit_message_text(f"⏳ Generating <b>{count}-question quiz</b> for <b>{topic_name}</b>... Please wait.", parse_mode="HTML")
+            label_text = f"{count}-question" if count > 0 else "✨ Auto-adaptive"
+            await query.edit_message_text(f"⏳ Generating <b>{label_text} quiz</b> for <b>{topic_name}</b>... Please wait.", parse_mode="HTML")
             
             try:
                 loop = asyncio.get_running_loop()
@@ -309,25 +313,30 @@ class TelegramBotManager:
         msg = f"🎯 <b>Question {q_idx + 1} of {total}</b> (Topic: <i>{session['topic']}</i>)\n\n"
         msg += f"<b>{q['question']}</b>\n\n"
         
-        keyboard = []
         options = q.get("options", [])
         option_keys = ["A", "B", "C", "D"]
         
-        row = []
+        # Display full options formatted cleanly in the message body
         for i, opt in enumerate(options[:4]):
             opt_key = option_keys[i]
             opt_clean = str(opt).strip()
-            if not (opt_clean.startswith(f"{opt_key})") or opt_clean.startswith(f"{opt_key}.")):
-                btn_text = f"{opt_key}) {opt_clean}"
-            else:
-                btn_text = opt_clean
-                
-            row.append(InlineKeyboardButton(btn_text[:35], callback_data=f"ansquiz:{q_idx}:{opt_key}"))
-            if len(row) == 2:
-                keyboard.append(row)
-                row = []
-        if row:
-            keyboard.append(row)
+            if opt_clean.startswith(f"{opt_key})") or opt_clean.startswith(f"{opt_key}."):
+                opt_clean = opt_clean[2:].strip()
+            msg += f"<b>{opt_key})</b> {opt_clean}\n\n"
+            
+        msg += "<i>Tap your answer option below:</i>"
+        
+        # Clean prominent option buttons
+        keyboard = [
+            [
+                InlineKeyboardButton("Option A", callback_data=f"ansquiz:{q_idx}:A"),
+                InlineKeyboardButton("Option B", callback_data=f"ansquiz:{q_idx}:B")
+            ],
+            [
+                InlineKeyboardButton("Option C", callback_data=f"ansquiz:{q_idx}:C"),
+                InlineKeyboardButton("Option D", callback_data=f"ansquiz:{q_idx}:D")
+            ]
+        ]
             
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode="HTML")
@@ -361,11 +370,11 @@ class TelegramBotManager:
             await update.message.reply_text(f"❌ Failed to clear knowledge base: {str(e)}")
 
     async def _notes_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = f"tg_{update.effective_user.id}"
         status_msg = await update.message.reply_text("📝 Generating study notes from your uploaded materials... Please wait.")
         try:
-            # Run blocking note generation in thread pool
             loop = asyncio.get_running_loop()
-            notes = await loop.run_in_executor(None, generate_notes_from_docs)
+            notes = await loop.run_in_executor(None, generate_notes_from_docs, None, None, user_id)
             
             # Send in chunks if notes exceed Telegram length limit (4000 chars)
             if len(notes) > 4000:
