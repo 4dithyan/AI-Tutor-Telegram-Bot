@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Tutor Agent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>AI Tutor Agent</h1>
+            <p>Your intelligent study companion • Developed by <a href="https://adithyan-portfolio.pages.dev" target="_blank" style="color:var(--primary); font-weight:600; text-decoration:none;">Adithyan</a></p>
+        </header>
+        
+        <main>
+            <!-- Left Column: Upload & Knowledge -->
+            <section class="panel sidebar">
+                <h2>Knowledge Base</h2>
+                
+                <div class="card upload-card">
+                    <h3>Upload Textbook (Images & PDFs)</h3>
+                    <input type="file" id="file-input" multiple accept="image/*,.pdf,application/pdf" />
+                    <div id="preview-container" class="preview-container"></div>
+                    <button id="upload-btn" class="btn primary-btn">Upload & Process</button>
+                    <p id="upload-status" class="status-text"></p>
+                </div>
+                
+                <div class="card db-card">
+                    <h3>Uploaded Documents</h3>
+                    <ul id="doc-list" class="doc-list">
+                        <!-- Documents injected here via JS -->
+                    </ul>
+                    <button id="refresh-docs-btn" class="btn secondary-btn">Refresh</button>
+                    <button id="clear-all-btn" class="btn danger-btn">Clear All Documents</button>
+                </div>
+            </section>
+            
+            <!-- Right Column: Chat & Notes -->
+            <section class="panel main-content">
+                <div class="tabs">
+                    <button class="tab-btn active" data-target="chat-section">Chat</button>
+                    <button class="tab-btn" data-target="notes-section">Notes Generator</button>
+                    <button class="tab-btn" data-target="quiz-section">Quiz & Topics</button>
+                </div>
+                
+                <!-- Chat Section -->
+                <div id="chat-section" class="tab-content active">
+                    <div class="chat-container">
+                        <div id="chat-history" class="chat-history">
+                            <div class="message assistant-msg">
+                                <p>Hello! 👋 I am your AI Textbook Tutor developed by <a href="https://adithyan-portfolio.pages.dev" target="_blank" style="color:var(--primary); font-weight:600;">Adithyan</a>. Upload some textbook images or PDFs, and I can answer questions based on them!</p>
+                            </div>
+                        </div>
+                        <div class="chat-input-area">
+                            <textarea id="chat-input" placeholder="Ask a question..."></textarea>
+                            <button id="send-btn" class="btn primary-btn">Send</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Notes Section -->
+                <div id="notes-section" class="tab-content">
+                    <div class="notes-container">
+                        <p>Generate study notes based on your uploaded textbooks.</p>
+                        <button id="generate-notes-btn" class="btn primary-btn">Generate Notes</button>
+                        <div id="notes-output" class="notes-output">
+                            <!-- Notes appear here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quiz & Topics Section -->
+                <div id="quiz-section" class="tab-content">
+                    <div class="quiz-container">
+                        <div class="topics-header">
+                            <h3>Classified Textbook Topics</h3>
+                            <p>Select a topic or take an overall quiz based on your uploaded material.</p>
+                            <div id="topic-chips" class="topic-chips">
+                                <button class="chip active" data-topic="">Overall Quiz</button>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap;">
+                                <label style="font-size:0.9rem; color:var(--text-muted)">Count:</label>
+                                <select id="quiz-count-select" class="chip" style="background:rgba(255,255,255,0.08); padding:6px 12px; outline:none; border-radius:8px;">
+                                    <option value="5" style="background:#1e293b; color:#fff">5 Questions</option>
+                                    <option value="10" style="background:#1e293b; color:#fff">10 Questions</option>
+                                    <option value="15" style="background:#1e293b; color:#fff">15 Questions</option>
+                                </select>
+                                <button id="generate-quiz-btn" class="btn primary-btn" style="max-width:220px; margin:0;">Start Interactive Quiz</button>
+                            </div>
+                        </div>
+                        
+                        <div id="quiz-player" class="quiz-player">
+                            <div class="quiz-placeholder">
+                                <p>Select a topic above, choose question count, and click "Start Interactive Quiz" to begin!</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

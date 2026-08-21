@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+ollama
+qdrant-client
+fastembed
+python-dotenv
+pydantic
+pydantic-settings
+pypdf
+pymupdf
+Pillow
+python-telegram-bot
