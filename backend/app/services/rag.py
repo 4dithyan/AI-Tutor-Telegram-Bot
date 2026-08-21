@@ -28,8 +28,11 @@ def process_rag_query(question: str, user_id: Optional[str] = None) -> Tuple[str
     top_chunks = vector_store.search(query_vector=query_vector, top_k=settings.top_k, user_id=user_id)
     
     if not top_chunks:
-        retrieval_logger.warning("No relevant chunks found in the database.")
-        return "I don't have any uploaded textbook material to answer this question. Please upload some images or PDFs first.", []
+        retrieval_logger.info("No uploaded textbook chunks found. Answering with general educational AI Tutor knowledge.")
+        general_prompt = f"Answer the student's study question accurately in a helpful, educational manner:\n\nQuestion: {question}"
+        general_answer = llm_service.generate_response(system_prompt=RAG_SYSTEM_PROMPT, user_prompt=general_prompt)
+        general_answer += "\n\n💡 <i>Tip: Upload a textbook photo or PDF anytime to ask questions specifically from your study materials!</i>"
+        return general_answer, []
         
     # 3. Construct context
     context_str = "--- TEXTBOOK CONTEXT ---\n"

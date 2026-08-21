@@ -489,14 +489,14 @@ class TelegramBotManager:
         user_id = f"tg_{update.effective_user.id}"
         lower_q = question.lower()
         
-        # Check greetings
-        if lower_q in ["hi", "hello", "hey", "hlo", "hiii", "start", "about"]:
+        # Check simple greetings
+        if lower_q in ["hi", "hello", "hey", "hlo", "hiii", "/start"]:
             welcome_reply = (
                 '👋 <b>Hello! I am AI Tutor developed by <a href="https://adithyan-portfolio.pages.dev">Adithyan</a>.</b>\n\n'
                 'I am your intelligent textbook study assistant!\n\n'
-                '📷 Send a photo of a textbook page\n'
-                '📄 Send a PDF document (up to 30MB)\n'
-                '💬 Ask any question about your uploaded materials!\n\n'
+                '💬 <b>Ask me any question directly in chat!</b>\n'
+                '📷 <b>Send a photo</b> of a textbook page\n'
+                '📄 <b>Send a PDF document</b> (up to 30MB)\n\n'
                 'Type /help to view all available commands.'
             )
             await update.message.reply_text(welcome_reply, parse_mode="HTML", disable_web_page_preview=True)
@@ -511,16 +511,14 @@ class TelegramBotManager:
             reply_text = answer
             if sources_data:
                 source_files = sorted(list(set(s["original_filename"] for s in sources_data)))
-                reply_text += f"\n\n📚 *Sources:* {', '.join(source_files)}"
+                reply_text += f"\n\n📚 <b>Sources:</b> {', '.join(source_files)}"
                 
-            await update.message.reply_text(reply_text, parse_mode="Markdown", disable_web_page_preview=False)
+            try:
+                await update.message.reply_text(reply_text, parse_mode="HTML", disable_web_page_preview=True)
+            except Exception:
+                await update.message.reply_text(reply_text, disable_web_page_preview=True)
         except Exception as e:
             api_logger.error(f"Telegram text chat error: {e}")
-            # Fallback without markdown parse mode if markdown parsing fails
-            try:
-                answer, _ = await loop.run_in_executor(None, process_rag_query, question, user_id)
-                await update.message.reply_text(answer)
-            except Exception as err2:
-                await update.message.reply_text(f"Sorry, an error occurred: {str(err2)}")
+            await update.message.reply_text(f"Sorry, an error occurred: {str(e)}")
 
 telegram_bot_service = TelegramBotManager()
