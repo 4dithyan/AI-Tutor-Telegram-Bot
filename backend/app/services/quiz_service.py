@@ -90,42 +90,41 @@ def extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
 
 def synthesize_fallback_questions(top_chunks: List[Dict[str, Any]], count: int = 5) -> List[Dict[str, Any]]:
     """
-    Guaranteed fallback MCQ synthesizer directly from context chunks if LLM JSON output fails.
+    Guaranteed fallback MCQ synthesizer directly using factual sentences from context chunks.
     """
     questions = []
-    sentences = []
+    facts = []
     for c in top_chunks:
         text = c.get("text", "")
         filename = c.get("original_filename", "textbook")
-        for s in re.split(r'[.\n]', text):
-            s_clean = s.strip()
-            if len(s_clean) > 25:
-                sentences.append((s_clean, filename))
+        for line in text.splitlines():
+            line_clean = line.strip()
+            if len(line_clean) > 20:
+                facts.append((line_clean, filename))
                 
-    if not sentences:
+    if not facts:
         return []
         
-    target = max(1, min(len(sentences), count))
+    target = max(1, min(len(facts), count))
     for i in range(target):
-        sent, fname = sentences[i]
-        words = [w for w in sent.split() if len(w) > 4]
-        key_term = words[0] if words else "the concept"
+        fact, fname = facts[i]
         
-        q_text = f"According to your uploaded document ({fname}), which statement is correct regarding {key_term}?"
+        # Pick 3 other real text lines from the document as realistic distractors
+        distractor_lines = [facts[(i + d) % len(facts)][0] for d in [1, 2, 3]]
         
         opts = [
-            f"A) {sent[:80]}...",
-            f"B) An unrelated assumption about {key_term}",
-            f"C) The inverse application of {key_term}",
-            f"D) None of the above"
+            f"A) {fact[:80]}",
+            f"B) {distractor_lines[0][:80]}",
+            f"C) {distractor_lines[1][:80]}",
+            f"D) {distractor_lines[2][:80]}"
         ]
         
         questions.append({
             "id": i + 1,
-            "question": q_text,
+            "question": f"Based on '{fname}', which of the following key statements is TRUE?",
             "options": opts,
             "correct": "A",
-            "explanation": f"Stated directly in {fname}: '{sent}'"
+            "explanation": f"Stated directly in {fname}: '{fact}'"
         })
         
     return questions
@@ -133,7 +132,7 @@ def synthesize_fallback_questions(top_chunks: List[Dict[str, Any]], count: int =
 def generate_quiz(topic: str = None, num_questions: int = 5, user_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Generates a structured multiple-choice quiz (MCQ) for a specific topic or overall content using user's uploaded documents.
-    Adaptively sizes question count based on uploaded content density.
+    Respects exact selected question count, or uses adaptive sizing when num_questions is 0 (Auto).
     """
     api_logger.info(f"Generating quiz for topic: {topic or 'Overall Textbook'} (user: {user_id or 'all'}, count: {num_questions})")
     
@@ -142,8 +141,9 @@ def generate_quiz(topic: str = None, num_questions: int = 5, user_id: Optional[s
     else:
         query_str = "textbook main concepts key definitions formulas principles terms summary"
 
-    # Fetch more chunks for 10/15 question quizzes
-    fetch_k = max(10, num_questions * 2)
+    # Fetch sufficient context chunks
+    requested_n = num_questions if num_questions > 0 else 5
+    fetch_k = max(12, requested_n * 2)
     query_vec = embedding_service.embed_query(query_str)
     top_chunks = vector_store.search(query_vec, top_k=fetch_k, user_id=user_id)
     
@@ -153,24 +153,28 @@ def generate_quiz(topic: str = None, num_questions: int = 5, user_id: Optional[s
             "questions": []
         }
         
-    # Calculate available content density and adapt question count
-    total_chars = sum(len(c.get("text", "")) for c in top_chunks)
-    if total_chars < 600:
-        target_count = min(num_questions, 3)
-    elif total_chars < 1500:
-        target_count = min(num_questions, 5)
+    # Determine exact target question count
+    if num_questions == 0:  # Auto (Smart Count)
+        total_chars = sum(len(c.get("text", "")) for c in top_chunks)
+        if total_chars < 800:
+            target_count = 3
+        elif total_chars < 2000:
+            target_count = 5
+        else:
+            target_count = 10
     else:
-        target_count = num_questions
+        target_count = num_questions  # Respect exact requested size (5, 10, 15)
         
     context_str = "\n\n".join([f"Source Document ({c['original_filename']}):\n{c['text']}" for c in top_chunks])
     
     system_prompt = f"""
 You are a precise educational exam creator. 
-STRICT MANDATE: Generate up to {target_count} Multiple Choice Questions (MCQs) BASED STRICTLY AND ONLY ON THE PROVIDED TEXTBOOK CONTEXT BELOW. 
-Do NOT ask generic questions or questions about topics outside the provided context.
-Every question MUST have EXPLICITLY 4 options: A), B), C), and D).
+STRICT MANDATE: Generate EXACTLY {target_count} Multiple Choice Questions (MCQs) BASED STRICTLY AND ONLY ON THE PROVIDED TEXTBOOK CONTEXT BELOW. 
+- Do NOT ask generic questions or questions about topics outside the provided context.
+- Questions MUST test specific facts, terms, definitions, formulas, or figures explicitly mentioned in the text.
+- All 4 options A), B), C), D) MUST be plausible choices based on the textbook text.
+- Output ONLY valid JSON using this exact schema:
 
-Output ONLY valid JSON with no markdown formatting, using this exact schema:
 {{
   "topic": "{topic or 'Overall Textbook'}",
   "questions": [
@@ -185,7 +189,7 @@ Output ONLY valid JSON with no markdown formatting, using this exact schema:
 }}
 """
 
-    user_prompt = f"PROVIDED TEXTBOOK CONTEXT:\n{context_str}\n\nPlease generate the {target_count} MCQs in valid JSON format based ONLY on the context above."
+    user_prompt = f"PROVIDED TEXTBOOK CONTEXT:\n{context_str}\n\nPlease generate exactly {target_count} MCQs in valid JSON format based ONLY on the context above."
     
     questions = []
     try:
@@ -196,7 +200,7 @@ Output ONLY valid JSON with no markdown formatting, using this exact schema:
             raw_qs = quiz_data.get("questions") or quiz_data.get("quiz") or []
             
             option_keys = ["A", "B", "C", "D"]
-            for idx, q in enumerate(raw_qs, 1):
+            for idx, q in enumerate(raw_qs[:target_count], 1):
                 q_text = q.get("question") or f"Question {idx}"
                 raw_opts = q.get("options") or []
                 
